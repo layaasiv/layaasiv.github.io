@@ -1,5 +1,5 @@
 ---
-layout: home
+layout: page
 title: Writing Portfolio
 permalink: /writing-portfolio/
 ---
