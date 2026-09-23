@@ -66,7 +66,16 @@ Index hopping is when I2 is not the reverse complement of I1, but both indexes e
 Indexes that contain “N” nucleotide calls or are not in the set of expected indexes are considered unknown/invalid.
 
 ## Set Up the Project
-
+Directory structure:
+```
+demultiplex/
+├── src/
+│   └── dmux/
+├── tests/
+├── data/
+├── pyproject.toml
+└── README.md
+```
 
 ## Build Demux Tools
 As a rule of thumb, we want to modularize the pipeline into functions that accomplish subprocesses. This makes it much easier to test and debug the pipeline.
@@ -117,7 +126,27 @@ The majority of memory consumption for this tool will be through reading the FAS
 In order to classify reads, we need to compare I1 and I2. As outlined earlier in demultiplexing rules, we use if-else statements to identify which condition the read meets.
 
 ```python
-pass
+index1 = i1_record[1]
+index2 = i2_record[1]
+
+# get the reverse complement of index 2
+rc_index2 = reverse_complement(index2)
+
+# now the classification process using index1 and rc_index2
+if (
+    "N" in index_seq_1
+    or "N" in index_seq_2
+    or index_seq_1 not in indexes
+    or rc_index_seq_2 not in indexes
+):
+  ...
+
+elif index1 == rc_index2:
+  ...
+
+elif index 1 != rc_index2:
+  ...
+
 ```
 
 ### Write Classified Reads to Output Files
@@ -135,7 +164,7 @@ Further to this, we will ensure the index information is not lost after demultip
 We need a function that handles appending the indexes to the header.
 
 ```python
-def create_new_header():
+def create_new_header(header, index1, rc_index2):
   pass
 ```
 
