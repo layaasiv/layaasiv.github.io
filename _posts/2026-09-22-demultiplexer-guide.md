@@ -6,21 +6,30 @@ category: technical-writing
 ---
 
 ## Tool Overview
-Our goal with the current tool is for it to be able to take sequenced data in the form of FASTQ files and separate the records by sample using the indexes they carry. Additionally, it should filter and flag instances of index-hopping or unknown indexes. As output, it should generate clean, sample-separated FASTQ files, one for forward reads (R1) and one for reverse reads (R2) each. The indexes carried by the reads will be specified in the headers of each record in the files. It will also provide statistics on how many reads were in each category: properly matched indexes, hopped indexes, unknown indexes.
+In this tutorial, you'll build a Python-based demultiplexing pipeline for paired-end Illumina sequencing data with dual indexes. The pipeline will classify reads based on their index combinations and write them to separate output files. It will also handle instances of index hopping and invalid indexes. 
+
+### What You'll Learn
+* Parse FASTQ files
+* Match dual indexes to samples
+* Identify index hopping and invalid indexes
+* Write classified reads to output files
+* Package the pipeline as a command-line tool with `argparse`
+* Test the pipeline with `pytest`
 
 ## Background
-Genetic sequencing is expensive both in time and resources. If we were to sequence the fragments from one sample at a time, it would be very inefficient. Thus, it’s common to multiplex–that is, pool fragments from tens, hundreds, even thousands of different sample groups and sequence them in a single run. This also limits slight variations in reagents, temperature, or the sequencing machine between runs. Normally, these would result in batch effects, differentiating the samples based on minor experimental/protocol changes rather than real, biological differences.
+Genetic sequencing is expensive both in time and resources. If we were to sequence the fragments from one sample at a time, it would be very inefficient. Thus, it’s common to multiplex–-that is, pool fragments from tens, hundreds, even thousands of different sample groups and sequence them in a single run. This also limits slight variations in reagents, temperature, or the sequencing machine between runs. Normally, these would result in batch effects, differentiating the samples based on minor experimental/protocol changes rather than real, biological differences.
 
-We still need a way to separate the reads back into the sample groups they originated from after the sequencing process is complete to analyze our data by comparing across and within samples and pursue further experimental explorations. This is accomplished with indexing, the process of tagging every nucleic fragment with a short DNA sequence prior to sequencing that corresponds to its sample. Thus, the reads generated from the fragments will contain their indexes as well. We can use these indexes to group the sequenced reads by sample. This is the process we call “demultiplexing”. There are a few different ways that indexing is implemented.
+We still need a way to separate the reads back into the sample groups they originated from after the sequencing process is complete to analyze our data by comparing across and within samples and pursue further experimental explorations. This is accomplished with **indexing**, the process of tagging every nucleic fragment with a short DNA sequence prior to sequencing that corresponds to its sample. Thus, the reads generated from the fragments will contain their indexes as well. We can use these indexes to group the sequenced reads by sample. This is the process we call **“demultiplexing”**. There are a few different ways that indexing is implemented.
 
 ## Illumina Indexing
 Every library preparation kit handles indexing differently. For our purposes, we will focus on the Illumina protocol. Illumina indexes are located between the DNA insert and the sequencing adapters. They are sequenced in separate runs from the insert. There is a further distinction between single-indexed and dual-indexed libraries.
 
-Single-indexed libraries contain one index sequence appended to the end of the fragment. In Illumina sequencing, this would be the side that contains the P7 adapter. In this case, there would be one additional sequencing run that encodes Index 1 (i7) after the run for Read 1 (forward read).
+Single-indexed libraries contain one index sequence appended to the end of the fragment. In Illumina sequencing, this would be the side that contains the P7 adapter. In this case, there would be one additional sequencing run that encodes Index 1 (I1) after the run for R1.
 
-Dual-indexed libraries contain two index sequences appended on either side of the DNA fragment. In this case, there will be two additional sequencing runs that will each capture Index 1 (i7) and Index 2 (i5) separately after Read 1. There are two approaches to dual-indexing which differ primarily on how many unique index sequences are used. Combinatorial dual indexing is designed such that individual index sequences may repeat across sample groups, but the combination of i5 and i7 sequences are unique to each sample group. Unique dual indexing uses separate, non-redundant pairs of i5 and i7 for each sample group. The index of one pair never reoccurs as part of another pair. A major advantage of UDI is that it makes it much easier to detect and filter cases of index hopping, which is a rare phenomenon where a fragment gets attached with the wrong index on either or both ends. Usually, it occurs as a result of excess free adapters during library prep. If gone undetected, it can cause sample contamination and skew downstream analyses. Due to the redundancy in CDI and only one identifier in single-indexing, index hopping is more difficult to detect. 
+Dual-indexed libraries contain two index sequences appended on either side of the DNA fragment. In this case, there will be two additional sequencing runs that will each capture I1 and Index 2 (I2) separately after R1. There are two approaches to dual-indexing which differ primarily on how many unique index sequences are used. **Combinatorial dual indexing** is designed such that individual index sequences may repeat across sample groups, but the combination of I1 and I2 sequences are unique to each sample group. **Unique dual indexing (UDI)** uses separate, non-redundant pairs of I1 and I2 for each sample group. The index of one pair never reoccurs as part of another pair. A major advantage of UDI is that it makes it much easier to detect and filter cases of **index hopping**, which is a rare phenomenon where a fragment gets attached with the wrong index on either or both ends. Usually, it occurs as a result of excess free adapters during library prep. If gone undetected, it can cause sample contamination and skew downstream analyses.
 
-## Understand the Input Data: FASTQ Files
+## Understand the Input Data
+### FASTQ Files
 FASTQ is one of many bioinformatics file formats. It holds base calls from the sequencer along with a quality score indicating its confidence in the base call at each position. Each fragment that was sequenced is stored as a record, which have the following structure:
 
 ```
@@ -30,7 +39,18 @@ Base calls for this fragment
 Quality scores (encoded as ASCII symbols; read more about Phred scores).
 ```
 
+Note that the header is the first line of the record, and always begins with the "@" character. The second line contains the sequence as read by the sequencer. The third line usually just contains the "+" character, though it can also contain other metadata. The fourth line is the per base quality score.
+
 In the case of paired-end, dual indexed data, the different components of one fragment are stored across four FASTQ files. They are stored in the order that they are sequenced. The forward read (read 1; R1) is stored in the first file. Next, index 1 (I1). Then index 2 (I2), and finally, the reverse read (read 2; R2). 
+
+### Index File
+We need to tell the tool the expected index sequences. This information will be stored in a text file, which lists the sample name and its corresponding I1 sequence, tab-separated:
+
+```
+A1  ATTGCACC
+B2  TGGCTACA
+...
+```
 
 ## Assumptions
 Here are the assumptions we’re making for this tool:
