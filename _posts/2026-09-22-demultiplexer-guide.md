@@ -2,6 +2,7 @@
 layout: post
 title: "How to Build and Run a Genomic Sequencing Demultiplexer"
 date: 2026-09-22
+category: technical-writing
 ---
 
 ## Tool Overview
