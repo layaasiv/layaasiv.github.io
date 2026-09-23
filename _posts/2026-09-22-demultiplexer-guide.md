@@ -63,9 +63,18 @@ Here are the assumptions we’re making for this tool:
 ### Demultiplexing logic
 If the reverse complement of I2 = I1, then that reads belongs to the group encoded by that index. 
 Index hopping is when I2 is not the reverse complement of I1, but both indexes exist in the set of expected indexes.
-Indexes that contain “N” nucleotide calls or are not in the set of expected indexes are considered unknown.
+Indexes that contain “N” nucleotide calls or are not in the set of expected indexes are considered unknown/invalid.
 
 ## Set Up the Project
+```bash
+demultiplex \
+  -r1 R1.fastq.gz \
+  -i1 R2.fastq.gz \
+  -i2 R3.fastq.gz \
+  -r2 R4.fastq.gz \
+  -i indexes.txt \
+  -o path/to/output/directory/
+```
 
 ## Build Demux Tools
 As a rule of thumb, we want to modularize the pipeline into functions that accomplish subprocesses. This makes it much easier to test and debug the pipeline.
@@ -74,16 +83,40 @@ As a rule of thumb, we want to modularize the pipeline into functions that accom
 We will be reverse complementing DNA sequences many times in order to classify reads, so let's make it a function.
 
 ```python
-def reverse_complement():
-  pass
+def reverse_complement(sequence):
+  # hashmap of complementary bases
+  comp_bases = {"A":"T", ... "N":"N"}
+
+  rev_comp = ""
+
+  # check if the base is a key in the hashmap; only continue if it does, else raise error
+  for base in sequence:
+    if base not in comp_bases:
+      raise ValueError
+
+    rev_comp += comp_bases[base]
+
+  return rev_comp
+
 ```
 
 ### Implement a FASTQ Parser
 Rather than loading an entire FASTQ file into memory, the pipeline will load records one at a time using a generator.
 
 ```python
-def fastq_parser():
-  pass
+def fastq_parser(fastq_file):
+  while True:
+    header = fastq_file.readline().strip("\n")
+    # break the loop at the end of the file, at which point header will be an empty string, which equates to 'False'.
+    if not header:
+      break
+    seq = fastq_file.readline().strip("\n")
+    plus = fastq_file.readline().strip("\n")
+    qscore = fastq_file.readline().strip("\n")
+
+    # use of yield makes the product of the function a generator, so the position of the pointer is not reset at the end of the run; the next time it runs, it will pick up from where it left off last time,      generating the next record.
+    yield header, seq, plus, qscore
+
 ```
 
 The majority of memory consumption for this tool will be through reading the FASTQ files. These files can get very large, so we need to build our tool such that regardless of the input data size, a controlled amount of memory is used. Processing records incrementally keeps the memory usage low and allows more efficient handling of large sequencing files. 
