@@ -105,15 +105,15 @@ def reverse_complement(sequence):
 Rather than loading an entire FASTQ file into memory, the pipeline will load records one at a time using a generator.
 
 ```python
-def fastq_parser(fastq_file):
+def fastq_parser(fastq_file_handle):
   while True:
-    header = fastq_file.readline().strip("\n")
+    header = fastq_file_handle.readline().strip("\n")
     # break the loop at the end of the file, at which point header will be an empty string, which equates to 'False'.
     if not header:
       break
-    seq = fastq_file.readline().strip("\n")
-    plus = fastq_file.readline().strip("\n")
-    qscore = fastq_file.readline().strip("\n")
+    seq = fastq_file_handle.readline().strip("\n")
+    plus = fastq_file_handle.readline().strip("\n")
+    qscore = fastq_file_handle.readline().strip("\n")
 
     # use of yield makes the product of the function a generator, so the position of the pointer is not reset at the end of the run; the next time it runs, it will pick up from where it left off last time,      generating the next record.
     yield header, seq, plus, qscore
@@ -153,7 +153,8 @@ elif index 1 != rc_index2:
 Before the classification process, the pipeline will create all output FASTQ files. Each expected index will have output FASTQ files named after it. Additionally, there will be hopped.fastq files to hold index hopped reads and unknown.fastq for reads with unknown reads.
 
 ```python
-pass
+def write_record_to_file(output_file_handle, header, sequence, plus_line, qscores):
+  output_file_handle.write(f"{header}\n{sequence}\n{plus_line}\n{qscores}\n")
 ```
 
 Notice that each class has two output files: R1 and R2. R1 and R2 must be synchronized; these will hold the forward and reverse read, respectively, of that fragment. In other words, the record from input R1.fastq should be written to its output R1 FASTQ and its counterpart from input R2.fastq will be written to the corresponding output R2 FASTQ.
@@ -165,7 +166,7 @@ We need a function that handles appending the indexes to the header.
 
 ```python
 def create_new_header(header, index1, rc_index2):
-  pass
+  return f"{header} {index1}-{rc_index2}"
 ```
 
 ## Add a Command Line Interface (CLI)
@@ -179,6 +180,12 @@ demultiplex \
   -r2 R4.fastq.gz \
   -i indexes.txt \
   -o path/to/output/directory/
+```
+
+```python
+import argparse
+
+
 ```
 
 ## Add Tests
