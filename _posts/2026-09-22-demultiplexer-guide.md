@@ -66,15 +66,7 @@ Index hopping is when I2 is not the reverse complement of I1, but both indexes e
 Indexes that contain “N” nucleotide calls or are not in the set of expected indexes are considered unknown/invalid.
 
 ## Set Up the Project
-```bash
-demultiplex \
-  -r1 R1.fastq.gz \
-  -i1 R2.fastq.gz \
-  -i2 R3.fastq.gz \
-  -r2 R4.fastq.gz \
-  -i indexes.txt \
-  -o path/to/output/directory/
-```
+
 
 ## Build Demux Tools
 As a rule of thumb, we want to modularize the pipeline into functions that accomplish subprocesses. This makes it much easier to test and debug the pipeline.
@@ -150,8 +142,14 @@ def create_new_header():
 ## Add a Command Line Interface (CLI)
 We will use the Python package `argparse` to build a CLI for this tool. 
 
-```python
-pass
+```bash
+demultiplex \
+  -r1 R1.fastq.gz \
+  -i1 R2.fastq.gz \
+  -i2 R3.fastq.gz \
+  -r2 R4.fastq.gz \
+  -i indexes.txt \
+  -o path/to/output/directory/
 ```
 
 ## Add Tests
