@@ -153,13 +153,41 @@ elif index 1 != rc_index2:
 Before the classification process, the pipeline will create all output FASTQ files. Each expected index will have output FASTQ files named after it. Additionally, there will be hopped.fastq files to hold index hopped reads and unknown.fastq for reads with unknown reads.
 
 ```python
+with ExitStack() as stack:
+  output_files = {}
+  for index in indexes:
+    output_files[index] = [
+      stack.enter_context(
+        gzip.open(f"{output_path}/{index}_R1.fastq.gz", "wt")
+      ),
+      stack.enter_context(
+        gzip.open(f"{output_path}/{index}_R2.fastq.gz", "wt")
+      )
+    ]
+
+  unknown_r1 = stack.enter_context(
+    gzip.open(f"{output_path}/unknown_R1.fastq.gz", "wt")
+  )
+  ...
+
+  hopped_r1 = stack.enter_context(
+    gzip.open(f"{output_path}/hopped_R1.fastq.gz", "wt")
+  )
+  ...
+
+```
+Here, the use of ExitStack() is a cleaner alternative to using `with open(...) as fh`. At the end of the stack, all files are automatically cleaned and closed without you having to explicitly call `file.close()`.
+
+Notice that each class has two output files: R1 and R2. R1 and R2 must be synchronized; these will hold the forward and reverse read, respectively, of that fragment. In other words, the record from input R1.fastq should be written to its output R1 FASTQ and its counterpart from input R2.fastq will be written to the corresponding output R2 FASTQ.
+
+Then, we start reading all the input files by record, determine which category they belong to with the `if-else` block shown above, and write the record to its corresponding output file. We can also make a `write_record_to_file()` function:
+
+```python
 def write_record_to_file(output_file_handle, header, sequence, plus_line, qscores):
   output_file_handle.write(f"{header}\n{sequence}\n{plus_line}\n{qscores}\n")
 ```
 
-Notice that each class has two output files: R1 and R2. R1 and R2 must be synchronized; these will hold the forward and reverse read, respectively, of that fragment. In other words, the record from input R1.fastq should be written to its output R1 FASTQ and its counterpart from input R2.fastq will be written to the corresponding output R2 FASTQ.
-
-Further to this, we will ensure the index information is not lost after demultiplexing by appending I1-I2 pairs to the headers of each record. This is useful particularly in hopped and unknown instances, so that the user can use this information to make decisions on a case-by-case basis of these records.
+We will also ensure the index information is not lost after demultiplexing by appending I1-I2 pairs to the headers of each record. This is useful particularly in hopped and unknown instances, so that the user can use this information to make decisions on a case-by-case basis of these records.
 
 ### Implement a New Header Generator
 We need a function that handles appending the indexes to the header.
@@ -169,8 +197,56 @@ def create_new_header(header, index1, rc_index2):
   return f"{header} {index1}-{rc_index2}"
 ```
 
+## Putting it All Together
+Here is the general architecture of the pipeline:
+
+```python
+with ExitStack() as stack:
+  # open all output files
+
+  with (
+      gzip.open(..., "rt") as r1,
+      gzip.open(..., "rt") as i1,
+      ...
+      ):
+        r1_records = fastq_parser(r1)
+        i1_records = fastq_parser(i1)
+
+        for r1_rec, i1_rec, ... in zip(r1_records, i1_records, ...):
+          index1 = i1_rec[1]
+          index2 = i2_rec[1]
+          rc_index2 = reverse_complement(index2)
+          new_header = create_new_header(r1_rec[0], index1, rc_index2)
+
+          # classify
+          if index1 == rc_index2:
+            write_record_to_file(output_files[index1][0], new_header, r1_rec[1], r1_rec[2], r1_rec[3])
+            write_record_to_file(output_files[index1][1], new_header, r2_rec[1], r2_rec[2], r2_rec[3])
+
+          ...
+
+```
+
+## Other Features
+I kept count of the number of paired-end reads that are classified as each of the sample groups, unknown, and hopped. Specifically, I tracked the unique hopped index pair instances and how often they each occurred. The pipeline output these per-class counts to `stdout`. 
+
+These counts could also be used to compute and present within-matched-indexes and within-hopped-indexes frequencies, as well as overall proportions of hopped, matched, and unknown index instances. 
+
+For example, TSVs containing this information for matched and hopped reads, respectively:
+```
+Index name  Count  % Sample in Matched  % Sample in Total
+ATTGCACC  344  45  40
+...
+```
+
+```
+Index pair  Count  % Index pair in Total
+ATTGCACC-TGGCTACA 10  2
+...
+```
+
 ## Add a Command Line Interface (CLI)
-We will use the Python package `argparse` to build a CLI for this tool. 
+We will use the Python package `argparse` to build a CLI for this tool. The final tool will take the following user-provided inputs:
 
 ```bash
 demultiplex \
@@ -182,22 +258,21 @@ demultiplex \
   -o path/to/output/directory/
 ```
 
-```python
-import argparse
-
-
-```
-
 ## Add Tests
 ### Unit Tests
-Test individual functions to ensure subprocesses are being conducted as expected:
+Test individual functions to ensure subprocesses are being conducted as expected, some examples below:
 
 ```python
 def test_reverse_complement():
-  pass
+  assert reverse_complement("ATTGCTAT") == "ATAGCAAT", "Incorrect reverse complement sequence generated."
 
 def test_fastq_parser():
-  pass
+  with gzip.open("tests/data/R1.fastq.gz", "rt") as r1:
+    record = fastq_parser(r1)
+
+    assert len(record) == 4, "Incorrect record length."
+    assert record[0].startswith("@"), "Header does not have expected structure."
+    ...
 
 def test_demultiplex():
   pass
