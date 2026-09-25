@@ -85,19 +85,19 @@ We will be reverse complementing DNA sequences many times in order to classify r
 
 ```python
 def reverse_complement(sequence):
-  # hashmap of complementary bases
-  comp_bases = {"A":"T", ... "N":"N"}
-
-  rev_comp = ""
-
-  # check if the base is a key in the hashmap; only continue if it does, else raise error
-  for base in sequence:
-    if base not in comp_bases:
-      raise ValueError
-
-    rev_comp += comp_bases[base]
-
-  return rev_comp
+    # hashmap of complementary bases
+    comp_bases = {"A":"T", ... "N":"N"}
+  
+    rev_comp = ""
+  
+    # check if the base is a key in the hashmap; only continue if it does, else raise error
+    for base in sequence:
+        if base not in comp_bases:
+            raise ValueError
+    
+        rev_comp += comp_bases[base]
+  
+    return rev_comp
 
 ```
 
@@ -106,17 +106,17 @@ Rather than loading an entire FASTQ file into memory, the pipeline will load rec
 
 ```python
 def fastq_parser(fastq_file_handle):
-  while True:
-    header = fastq_file_handle.readline().strip("\n")
-    # break the loop at the end of the file, at which point header will be an empty string, which equates to 'False'.
-    if not header:
-      break
-    seq = fastq_file_handle.readline().strip("\n")
-    plus = fastq_file_handle.readline().strip("\n")
-    qscore = fastq_file_handle.readline().strip("\n")
-
-    # use of yield makes the product of the function a generator, so the position of the pointer is not reset at the end of the run; the next time it runs, it will pick up from where it left off last time,      generating the next record.
-    yield header, seq, plus, qscore
+    while True:
+        header = fastq_file_handle.readline().strip("\n")
+        # break the loop at the end of the file, at which point header will be an empty string, which equates to 'False'.
+        if not header:
+            break
+        seq = fastq_file_handle.readline().strip("\n")
+        plus = fastq_file_handle.readline().strip("\n")
+        qscore = fastq_file_handle.readline().strip("\n")
+    
+        # use of yield makes the product of the function a generator, so the position of the pointer is not reset at the end of the run; the next time it runs, it will pick up from where it left off last time, generating the next record.
+        yield header, seq, plus, qscore
 
 ```
 
@@ -154,26 +154,26 @@ Before the classification process, the pipeline will create all output FASTQ fil
 
 ```python
 with ExitStack() as stack:
-  output_files = {}
-  for index in indexes:
-    output_files[index] = [
-      stack.enter_context(
-        gzip.open(f"{output_path}/{index}_R1.fastq.gz", "wt")
-      ),
-      stack.enter_context(
-        gzip.open(f"{output_path}/{index}_R2.fastq.gz", "wt")
-      )
-    ]
-
-  unknown_r1 = stack.enter_context(
-    gzip.open(f"{output_path}/unknown_R1.fastq.gz", "wt")
-  )
-  ...
-
-  hopped_r1 = stack.enter_context(
-    gzip.open(f"{output_path}/hopped_R1.fastq.gz", "wt")
-  )
-  ...
+    output_files = {}
+    for index in indexes:
+        output_files[index] = [
+            stack.enter_context(
+              gzip.open(f"{output_path}/{index}_R1.fastq.gz", "wt")
+            ),
+            stack.enter_context(
+              gzip.open(f"{output_path}/{index}_R2.fastq.gz", "wt")
+            )
+          ]
+  
+    unknown_r1 = stack.enter_context(
+      gzip.open(f"{output_path}/unknown_R1.fastq.gz", "wt")
+    )
+    ...
+  
+    hopped_r1 = stack.enter_context(
+      gzip.open(f"{output_path}/hopped_R1.fastq.gz", "wt")
+    )
+    ...
 
 ```
 Here, the use of ExitStack() is a cleaner alternative to using `with open(...) as fh`. At the end of the stack, all files are automatically cleaned and closed without you having to explicitly call `file.close()`.
@@ -184,7 +184,7 @@ Then, we start reading all the input files by record, determine which category t
 
 ```python
 def write_record_to_file(output_file_handle, header, sequence, plus_line, qscores):
-  output_file_handle.write(f"{header}\n{sequence}\n{plus_line}\n{qscores}\n")
+    output_file_handle.write(f"{header}\n{sequence}\n{plus_line}\n{qscores}\n")
 ```
 
 We will also ensure the index information is not lost after demultiplexing by appending I1-I2 pairs to the headers of each record. This is useful particularly in hopped and unknown instances, so that the user can use this information to make decisions on a case-by-case basis of these records.
@@ -194,7 +194,7 @@ We need a function that handles appending the indexes to the header.
 
 ```python
 def create_new_header(header, index1, rc_index2):
-  return f"{header} {index1}-{rc_index2}"
+    return f"{header} {index1}-{rc_index2}"
 ```
 
 ## Putting it All Together
@@ -202,28 +202,28 @@ Here is the general architecture of the pipeline:
 
 ```python
 with ExitStack() as stack:
-  # open all output files
-
-  with (
-      gzip.open(..., "rt") as r1,
-      gzip.open(..., "rt") as i1,
-      ...
-      ):
-        r1_records = fastq_parser(r1)
-        i1_records = fastq_parser(i1)
-
-        for r1_rec, i1_rec, ... in zip(r1_records, i1_records, ...):
-          index1 = i1_rec[1]
-          index2 = i2_rec[1]
-          rc_index2 = reverse_complement(index2)
-          new_header = create_new_header(r1_rec[0], index1, rc_index2)
-
-          # classify
-          if index1 == rc_index2:
-            write_record_to_file(output_files[index1][0], new_header, r1_rec[1], r1_rec[2], r1_rec[3])
-            write_record_to_file(output_files[index1][1], new_header, r2_rec[1], r2_rec[2], r2_rec[3])
-
-          ...
+    # open all output files
+  
+    with (
+        gzip.open(..., "rt") as r1,
+        gzip.open(..., "rt") as i1,
+        ...
+        ):
+            r1_records = fastq_parser(r1)
+            i1_records = fastq_parser(i1)
+    
+            for r1_rec, i1_rec, ... in zip(r1_records, i1_records, ...):
+                index1 = i1_rec[1]
+                index2 = i2_rec[1]
+                rc_index2 = reverse_complement(index2)
+                new_header = create_new_header(r1_rec[0], index1, rc_index2)
+      
+                # classify
+                if index1 == rc_index2:
+                  write_record_to_file(output_files[index1][0], new_header, r1_rec[1], r1_rec[2], r1_rec[3])
+                  write_record_to_file(output_files[index1][1], new_header, r2_rec[1], r2_rec[2], r2_rec[3])
+      
+                ...
 
 ```
 
@@ -264,37 +264,111 @@ Test individual functions to ensure subprocesses are being conducted as expected
 
 ```python
 def test_reverse_complement():
-  assert reverse_complement("ATTGCTAT") == "ATAGCAAT", "Incorrect reverse complement sequence generated."
+    assert reverse_complement("ATTGCTAT") == "ATAGCAAT", "Incorrect reverse complement sequence generated."
 
-def test_fastq_parser():
-  with gzip.open("tests/data/R1.fastq.gz", "rt") as r1:
-    record = fastq_parser(r1)
-
-    assert len(record) == 4, "Incorrect record length."
-    assert record[0].startswith("@"), "Header does not have expected structure."
     ...
 
-def test_demultiplex():
-  pass
+def test_fastq_parser():
+    with gzip.open("tests/data/R1.fastq.gz", "rt") as r1:
+        record = fastq_parser(r1)
+    
+        assert len(record) == 4, "Incorrect record length."
+        assert record[0].startswith("@"), "Header does not have expected structure."
+
+        ...
 ```
+
+Test the demultiplex pipeline:
+
+```python
+# import demultiplex function from src/dmux/dmux.py
+from dmux.dmux import demultiplex
+
+def test_demultiplex():
+    # run the pipeline
+    demultiplex(
+        index_file="data/indexes.txt",
+        r1_file="data/R1.fastq.gz",
+        ...
+    )
+
+    # check that all output files exist
+    for index in indexes:
+        assert check_file_exists(f"{output_path}/{index}_R1.fastq.gz"), (
+            f"Output file for {index} R1 does not exist."
+        )
+        assert check_file_exists(f"{output_path}/{index}_R2.fastq.gz"), (
+            f"Output file for {index} R2 does not exist."
+        )
+
+    # check if the number of headers matches the expected count
+    for index in indexes:
+        r1_header_count = count_headers(f"{output_path}/{index}_R1.fastq.gz")
+        r2_header_count = count_headers(f"{output_path}/{index}_R2.fastq.gz")
+        assert r1_header_count == r2_header_count, (
+            f"Header count mismatch for {index}: R1 has {r1_header_count}, R2 has {r2_header_count}."
+        )
+
+    ...
+
+```
+
+These are just some examples of things you could want to verify during testing. In order to conduct testing, you'll need a small synthetic dataset without corresponding expected output. You can use this to ensure all the functions are working as expected, and the overall tool is processing input data properly.
 
 ### Input Validation Test 
 We should also create tests that ensure input FASTQ files are not malformed or corrupted. By default, it will run on the small, synthetic test dataset provided in the project repo, but it can also be applied to user-specified data.
 
 ```python
-def test_inputs():
-  pass
+def test_input_files(input_path):
+    # code that gets file lengths in lines, number of headers present
+    ...
+
+    assert r1_len != 0, "R1.fastq.gz has 0 lines"
+    assert r1_len == r2_len == r3_len == r4_len, "Number of lines are unequal across the 4 input FASTQ files."
+    assert r1_len % 4 == 0, "R1.fastq.gz length is not divisible by 4 -- records may be malformed."
+    assert num_headers_r1 == num_headers_r2 == num_headers_r3 == num_headers_r4, "Unequal number of headers across the 4 input FASTQ files."
+
+    ...
+
 ```
 
 ### Integration Test
 Test the synchronicity of the entire pipeline end-to-end, from parsing user input to generating output:
 
 ```python
-def test_cli():
-  pass
-```
+import subprocess
 
-### Validate the Results
-Using our test dataset, we should also have an expected output, which we will ensure is the output produced by the tool when the test data is provided as input.
+def test_cli():
+    result = subprocess.run(
+        [
+            "dmux",
+            "-r1",
+            str("data/R1.fastq.gz"),
+            "-i1",
+            str("data/R2.fastq.gz"),
+            "-i2",
+            str("data/R3.fastq.gz"),
+            "-r2",
+            str(D"data/R4.fastq.gz"),
+            "-i",
+            str("data/indexes.txt"),
+            "-o",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # check that the command ran successfully
+    assert result.returncode == 0, f"CLI command failed with error: {result.stderr}"
+
+    # check output file lengths
+    # hopped records
+    assert count_fastq_records(output_dir / "hopped_R1.fastq.gz") == 3, ("Expected 3 hopped records in hopped_R1.fastq.gz.")
+
+    ...
+
+```
 
 
